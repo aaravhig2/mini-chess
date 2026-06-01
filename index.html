@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Mini Chess - Challenge</title>
+    <title>Mini Chess - Fix</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.css">
     <style>
         body { font-family: sans-serif; background: #302e2b; color: #fff; display: flex; flex-direction: column; align-items: center; min-height: 100vh; margin: 0; }
@@ -43,21 +43,55 @@
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
 
     <script>
-        let game = new Chess(), board = null, peer = null, conn = null, isHost = false;
+        let game = new Chess(), board = null, peer = null, conn = null;
 
-        function initPeer(id) {
+        // HOST SETUP: Claims the custom room ID
+        function initHostPeer(id) {
             peer = new Peer('minichess-room-' + id);
+            
+            peer.on('open', () => {
+                $('#lobby-ui').hide();
+                $('#waiting-ui').show();
+                $('#status-text').text("Challenge Code: " + id);
+            });
+
             peer.on('connection', c => {
                 conn = c;
-                isHost = true;
-                $('#lobby-ui, #create-btn, #join-btn').hide();
-                $('#waiting-ui, #setup-tools').show();
+                $('#setup-tools').show();
                 $('#status-text').text("Opponent Joined! Set pieces.");
                 board = Chessboard('board', { draggable: true, dropOffBoard: 'trash', sparePieces: true, position: 'start' });
+            });
+
+            peer.on('error', err => {
+                console.error(err);
+                alert("Connection error. Try creating a new party.");
+                location.reload();
+            });
+        }
+
+        // JOINER SETUP: Gets a completely random ID, then connects to the host
+        function initJoinerAndConnect(targetCode) {
+            peer = new Peer(); // Leaving this blank assigns a completely random, fresh ID to Tab 2
+            
+            peer.on('open', () => {
+                $('#lobby-ui').hide();
+                $('#waiting-ui').show();
+                $('#status-text').text("Waiting for Host to set board...");
+                
+                // Connect to the host's specific room
+                conn = peer.connect('minichess-room-' + targetCode);
+                setupJoinerListeners();
+            });
+
+            peer.on('error', err => {
+                console.error(err);
+                alert("Could not find that room code.");
+                location.reload();
             });
         }
 
         function clearBoard() { board.clear(false); }
+        
         function confirmSetup() {
             let fen = board.fen() + " w - - 0 1";
             conn.send({ type: 'setup', fen: fen });
@@ -70,23 +104,22 @@
             if(color === 'black') board.orientation('black');
         }
 
-        $('#create-btn').on('click', () => {
-            let code = Array.from({length:5}, ()=> 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[Math.floor(Math.random()*32)]).join('');
-            initPeer(code);
-            $('#lobby-ui').hide();
-            $('#waiting-ui').show();
-            $('#status-text').text("Challenge Code: " + code);
-        });
-
-        $('#join-btn').on('click', () => {
-            conn = peer.connect('minichess-room-' + $('#join-code').val().toUpperCase());
-            $('#lobby-ui').hide();
-            $('#waiting-ui').show();
-            $('#status-text').text("Waiting for Host to set board...");
+        function setupJoinerListeners() {
             conn.on('data', d => {
                 if(d.type === 'setup') startGame(d.fen, 'black');
                 else if(d.type === 'move') { game.move(d.moveObj); board.position(game.fen()); }
             });
+        }
+
+        $('#create-btn').on('click', () => {
+            let code = Array.from({length:5}, ()=> 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[Math.floor(Math.random()*32)]).join('');
+            initHostPeer(code);
+        });
+
+        $('#join-btn').on('click', () => {
+            let targetCode = $('#join-code').val().trim().toUpperCase();
+            if(!targetCode) return alert("Enter a code first!");
+            initJoinerAndConnect(targetCode);
         });
 
         function onDragStart(s, p) { return !game.game_over() && (p.search(game.turn() === 'w' ? /^w/ : /^b/) !== -1); }
