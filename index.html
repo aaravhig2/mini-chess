@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Mini Chess - Challenge</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.css">
+    <style>
+        body { font-family: sans-serif; background: #302e2b; color: #fff; display: flex; flex-direction: column; align-items: center; min-height: 100vh; margin: 0; }
+        #board { width: 400px; max-width: 90vw; margin: 20px 0; }
+        .menu { background: #262421; padding: 20px; border-radius: 8px; text-align: center; width: 320px; }
+        .btn { background: #81b64c; color: #fff; border: none; padding: 10px 20px; cursor: pointer; border-radius: 4px; font-weight: bold; margin: 5px; width: 90%; }
+        input { padding: 10px; text-transform: uppercase; text-align: center; width: 85%; margin: 5px; }
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+
+    <h1>Mini Chess Challenge</h1>
+    
+    <div class="menu" id="menu">
+        <div id="lobby-ui">
+            <input type="number" id="mins" value="10" placeholder="Minutes">
+            <button class="btn" id="create-btn">Create Challenge</button>
+            <input type="text" id="join-code" placeholder="ENTER CHALLENGE CODE" maxlength="5">
+            <button class="btn" id="join-btn">Join Challenge</button>
+        </div>
+
+        <div id="waiting-ui" class="hidden">
+            <h3 id="status-text">Waiting for opponent...</h3>
+            <div id="setup-tools" class="hidden">
+                <button class="btn" onclick="clearBoard()">Clear Board</button>
+                <button class="btn" onclick="confirmSetup()">Confirm Position & Start</button>
+                <p style="font-size: 0.7rem; color: #aaa;">Drag pieces to set the board</p>
+            </div>
+        </div>
+    </div>
+
+    <div id="board"></div>
+
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.js"></script>
+    <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
+
+    <script>
+        let game = new Chess(), board = null, peer = null, conn = null, isHost = false;
+
+        function initPeer(id) {
+            peer = new Peer('minichess-room-' + id);
+            peer.on('connection', c => {
+                conn = c;
+                isHost = true;
+                $('#lobby-ui, #create-btn, #join-btn').hide();
+                $('#waiting-ui, #setup-tools').show();
+                $('#status-text').text("Opponent Joined! Set pieces.");
+                board = Chessboard('board', { draggable: true, dropOffBoard: 'trash', sparePieces: true, position: 'start' });
+            });
+        }
+
+        function clearBoard() { board.clear(false); }
+        function confirmSetup() {
+            let fen = board.fen() + " w - - 0 1";
+            conn.send({ type: 'setup', fen: fen });
+            startGame(fen, 'white');
+        }
+
+        function startGame(fen, color) {
+            $('#menu').hide();
+            board = Chessboard('board', { draggable: true, position: fen, onDragStart, onDrop });
+            if(color === 'black') board.orientation('black');
+        }
+
+        $('#create-btn').on('click', () => {
+            let code = Array.from({length:5}, ()=> 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[Math.floor(Math.random()*32)]).join('');
+            initPeer(code);
+            $('#lobby-ui').hide();
+            $('#waiting-ui').show();
+            $('#status-text').text("Challenge Code: " + code);
+        });
+
+        $('#join-btn').on('click', () => {
+            conn = peer.connect('minichess-room-' + $('#join-code').val().toUpperCase());
+            $('#lobby-ui').hide();
+            $('#waiting-ui').show();
+            $('#status-text').text("Waiting for Host to set board...");
+            conn.on('data', d => {
+                if(d.type === 'setup') startGame(d.fen, 'black');
+                else if(d.type === 'move') { game.move(d.moveObj); board.position(game.fen()); }
+            });
+        });
+
+        function onDragStart(s, p) { return !game.game_over() && (p.search(game.turn() === 'w' ? /^w/ : /^b/) !== -1); }
+        function onDrop(s, t) {
+            let m = game.move({ from: s, to: t, promotion: 'q' });
+            if (!m) return 'snapback';
+            conn.send({ type: 'move', moveObj: { from: s, to: t, promotion: 'q' } });
+        }
+    </script>
+</body>
+</html>
