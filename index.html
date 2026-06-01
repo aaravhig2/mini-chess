@@ -598,83 +598,74 @@ if(!move){
 board.position(
     game.fen()
 );
+    checkGameOver();
 
-checkGameOver();
+    if(
+        conn &&
+        conn.open
+    ){
 
-if(
-    conn &&
-    conn.open
-){
+        conn.send({
 
-    conn.send({
+            type:'move',
 
-        type:'move',
+            moveObj:{
+                from:source,
+                to:target,
+                promotion:'q'
+            },
 
-        moveObj:{
-            from:source,
-            to:target,
-            promotion:'q'
-        },
-
-        clocks:{
-            w:whiteTime,
-            b:blackTime
-        }
-    });
-}
-```
-
+            clocks:{
+                w:whiteTime,
+                b:blackTime
+            }
+        });
+    }
 }
 
 $('#create-btn').on(
-'click',
-() => {
+    'click',
+    () => {
 
-```
-    let code =
-        Array.from(
-            {length:5},
-            () =>
-            'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
-            [
-                Math.floor(
-                    Math.random()*32
-                )
-            ]
-        ).join('');
+        let code =
+            Array.from(
+                {length:5},
+                () =>
+                'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+                [
+                    Math.floor(
+                        Math.random()*32
+                    )
+                ]
+            ).join('');
 
-    initHostPeer(code);
-}
-```
-
+        initHostPeer(code);
+    }
 );
 
 $('#join-btn').on(
-'click',
-() => {
+    'click',
+    () => {
 
-```
-    let targetCode =
-        $('#join-code')
-        .val()
-        .trim()
-        .toUpperCase();
+        let targetCode =
+            $('#join-code')
+            .val()
+            .trim()
+            .toUpperCase();
 
-    if(!targetCode){
+        if(!targetCode){
 
-        alert(
-            'Enter a code first!'
+            alert(
+                'Enter a code first!'
+            );
+
+            return;
+        }
+
+        initJoinerAndConnect(
+            targetCode
         );
-
-        return;
     }
-
-    initJoinerAndConnect(
-        targetCode
-    );
-}
-```
-
 );
 
 </script>
