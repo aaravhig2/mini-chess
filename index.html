@@ -52,9 +52,9 @@
         let game = new Chess(), board = null, peer = null, conn = null, myColor = null;
         let whiteTime = 0, blackTime = 0, clockInterval = null;
 
-        // Custom local piece asset path rule
+        // Custom local piece asset path rule (reads from your 'images' folder)
         function getLocalPieceTheme(piece) {
-            return piece + '.png'; 
+            return 'images/' + piece + '.png'; 
         }
 
         function initHostPeer(id) {
@@ -156,6 +156,29 @@
             $('#black-time-display').text("Black: " + formatTime(blackTime));
         }
 
+        // Checks if the game has ended based on chess rules
+        function checkGameOver() {
+            if (game.game_over()) {
+                clearInterval(clockInterval); // Freeze the clocks immediately
+                
+                if (game.in_checkmate()) {
+                    // The player whose turn it WAS right before the move loses.
+                    // If it's now White's turn, Black just delivered checkmate.
+                    let loser = game.turn() === 'w' ? 'White' : 'Black';
+                    let winner = game.turn() === 'w' ? 'Black' : 'White';
+                    alert("Checkmate! " + winner + " wins!");
+                } else if (game.in_stalemate()) {
+                    alert("Game Over: Draw by Stalemate!");
+                } else if (game.in_threefold_repetition()) {
+                    alert("Game Over: Draw by Threefold Repetition!");
+                } else if (game.insufficient_material()) {
+                    alert("Game Over: Draw by Insufficient Material (Not enough pieces to mate)!");
+                } else {
+                    alert("Game Over: Draw!");
+                }
+            }
+        }
+
         function setupMoveListeners() {
             conn.on('data', d => {
                 if(d.type === 'setup') {
@@ -166,6 +189,7 @@
                     whiteTime = d.clocks.w;
                     blackTime = d.clocks.b;
                     updateUI();
+                    checkGameOver(); // Check rules after opponent moves
                 }
             });
         }
@@ -194,6 +218,10 @@
                 moveObj: { from: s, to: t, promotion: 'q' },
                 clocks: { w: whiteTime, b: blackTime }
             });
+
+            // Delay checking game over by a tiny fraction of a second 
+            // so the piece physically drops onto the board before the alert box freezes the screen.
+            setTimeout(checkGameOver, 150);
         }
     </script>
 </body>
