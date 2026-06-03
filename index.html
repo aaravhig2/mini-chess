@@ -2,9 +2,14 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Mini Chess </title>
-    <!-- Verified Alternative CDN for Chessboard Stylesheet -->
-    <link rel="stylesheet" href="https://cloudflare.com">
+    <title>Mini Chess Challenge</title>
+    
+    <!-- SILENCE FAVICON ERROR: Tells the browser not to look for a shortcut icon -->
+    <link rel="icon" href="data:,">
+    
+    <!-- FIXED: Loading stylesheet locally from your repository folder -->
+    <link rel="stylesheet" href="chessboard.min.css">
+    
     <style>
         body { font-family: sans-serif; background: #302e2b; color: #fff; display: flex; flex-direction: column; align-items: center; min-height: 100vh; margin: 0; }
         #board { width: 400px; max-width: 90vw; margin: 20px 0; }
@@ -44,18 +49,16 @@
 
     <div id="board"></div>
 
-    <!-- FIXED: All dependencies loaded through Cloudflare CDN, avoiding jsdelivr entirely -->
-    <script src="https://cloudflare.com"></script>
-    <script src="https://cloudflare.com"></script>
-    <script src="https://cloudflare.com"></script>
-    <script src="https://cloudflare.com"></script>
+    <!-- FIXED: All dependencies loaded locally from your GitHub repository folder -->
+    <script src="jquery.min.js"></script>
+    <script src="chess.min.js"></script>
+    <script src="chessboard.min.js"></script>
+    <script src="peerjs.min.js"></script>
 
-    <!-- Switched back to standard script tag to avoid modern module racing issues -->
     <script>
         let game = null, board = null, peer = null, conn = null, myColor = null;
         let whiteTime = 0, blackTime = 0, clockInterval = null;
 
-        // Reads pieces directly from the same folder as index.html
         function getLocalPieceTheme(piece) {
             return piece + '.png';
         }
@@ -168,7 +171,6 @@
             if ((game.turn() === 'w' && piece.search(/^b/) !== -1) || (game.turn() === 'b' && piece.search(/^w/) !== -1)) return false;
         }
 
-        // Modified logic to ensure complete safety across chess.js library variants
         function onDrop(source, target) {
             let moveObj = { from: source, to: target, promotion: 'q' };
             let move = game.move(moveObj);
@@ -205,7 +207,6 @@
             });
         }
 
-        // Executed cleanly when scripts are evaluated
         $(document).ready(function() {
             game = new Chess(); 
 
