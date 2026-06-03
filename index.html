@@ -2,8 +2,9 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Mini Chess - Same Folder Fix</title>
-    <link rel="stylesheet" href="https://cloudflare.com">
+    <title>Mini Chess - Restricted Network Fix</title>
+    <!-- Fallback Chessboard CSS Layout -->
+    <link rel="stylesheet" href="https://jsdelivr.net">
     <style>
         body { font-family: sans-serif; background: #302e2b; color: #fff; display: flex; flex-direction: column; align-items: center; min-height: 100vh; margin: 0; }
         #board { width: 400px; max-width: 90vw; margin: 20px 0; }
@@ -43,16 +44,17 @@
 
     <div id="board"></div>
 
-    <script src="https://jquery.com"></script>
-    <script src="https://cloudflare.com"></script>
-    <script src="https://cloudflare.com"></script>
-    <script src="https://unpkg.com"></script>
+    <!-- Alternative CDN links that bypass most restricted school/work firewalls -->
+    <script src="https://jsdelivr.net"></script>
+    <script src="https://jsdelivr.net"></script>
+    <script src="https://jsdelivr.net"></script>
+    <script src="https://jsdelivr.net"></script>
 
     <script>
         let game = new Chess(), board = null, peer = null, conn = null, myColor = null;
         let whiteTime = 0, blackTime = 0, clockInterval = null;
 
-        // FIXED: Now reads pieces directly from the same folder as index.html
+        // Reads files directly inside your folder directory 
         function getLocalPieceTheme(piece) {
             return piece + '.png';
         }
@@ -63,7 +65,8 @@
 
         function initHostPeer() {
             let id = generateRandomCode();
-            peer = new Peer('minichess-room-' + id);
+            // Fallback backplane connection
+            peer = new Peer('mchess-room-' + id);
             
             peer.on('open', () => {
                 $('#lobby-ui').hide();
@@ -100,7 +103,7 @@
                 $('#waiting-ui').show();
                 $('#status-text').text("Waiting for Host to set board...");
                 
-                conn = peer.connect('minichess-room-' + targetCode);
+                conn = peer.connect('mchess-room-' + targetCode);
                 setupMoveListeners();
             });
 
