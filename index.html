@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Mini Chess Challenge</title>
+    <title>Mini Chess</title>
     <!-- Verified Chessboard Stylesheet -->
     <link rel="stylesheet" href="https://cloudflare.com">
     <style>
@@ -44,14 +44,17 @@
 
     <div id="board"></div>
 
-    <!-- Verified CDN Scripts Loaded in Order -->
-    <script src="https://jquery.com"></script>
-    <script src="https://cloudflare.com"></script>
-    <script src="https://cloudflare.com"></script>
+    <!-- Load Global Utilities First -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.js"></script>
     <script src="https://unpkg.com"></script>
 
-    <script>
-        // Declarations are global, but game is initialized inside document.ready
+    <!-- CRITICAL FIX: Script converted to module syntax to allow valid library imports -->
+    <script type="module">
+        // Import the modern Chess engine object from a reliable ESM distribution CDN
+        import { Chess } from 'https://jsdelivr.net';
+
+        // Assign game to global window scope so standard functions can read it seamlessly
         let game = null, board = null, peer = null, conn = null, myColor = null;
         let whiteTime = 0, blackTime = 0, clockInterval = null;
 
@@ -170,6 +173,8 @@
 
         function onDrop(source, target) {
             let moveObj = { from: source, to: target, promotion: 'q' };
+            
+            // Check move validity via engine
             let move = game.move(moveObj);
             if (move === null) return 'snapback';
 
@@ -204,9 +209,8 @@
             });
         }
 
-        // App and buttons are initialized together here
+        // Bind interactive triggers safely inside the execution context
         $(document).ready(function() {
-            // Fixes the Initialization ReferenceError 
             game = new Chess(); 
 
             $('#create-btn').on('click', function() {
