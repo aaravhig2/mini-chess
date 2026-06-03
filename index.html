@@ -9,7 +9,7 @@
         #board { width: 400px; max-width: 90vw; margin: 20px 0; }
         .menu { background: #262421; padding: 20px; border-radius: 8px; text-align: center; width: 320px; }
         .btn { background: #81b64c; color: #fff; border: none; padding: 10px 20px; cursor: pointer; border-radius: 4px; font-weight: bold; margin: 5px; width: 90%; }
-        input { padding: 10px; text-transform: uppercase; text-align: center; width: 85%; margin: 5px; }
+        input { padding: 10px; text-transform: uppercase; text-align: center; width: 85%; margin: 5px; background: #1a1917; border: 1px solid #444; color: #fff; }
         .hidden { display: none; }
         .timer-container { font-size: 1.5rem; font-weight: bold; background: #262421; padding: 10px; margin: 10px; border-radius: 5px; text-align: center; width: 320px; }
     </style>
@@ -34,8 +34,8 @@
         <div id="waiting-ui" class="hidden">
             <h3 id="status-text">Waiting for opponent...</h3>
             <div id="setup-tools" class="hidden">
-                <button class="btn" onclick="clearBoard()">Clear Board</button>
-                <button class="btn" onclick="confirmSetup()">Confirm Position & Start</button>
+                <button class="btn" id="clear-board-btn">Clear Board</button>
+                <button class="btn" id="confirm-setup-btn">Confirm Position & Start</button>
                 <p style="font-size: 0.7rem; color: #aaa;">Drag pieces to set the board</p>
             </div>
         </div>
@@ -52,12 +52,17 @@
         let game = new Chess(), board = null, peer = null, conn = null, myColor = null;
         let whiteTime = 0, blackTime = 0, clockInterval = null;
 
-        // Custom local piece asset path rule (reads from your 'images' folder)
-        function getLocalPieceTheme(piece) {
-            return 'images/' + piece + '.png'; 
+        // Automatically fetch standard pieces from a public link online so you don't need local images
+        function getPieceTheme(piece) {
+            return 'https://chessboardjs.com' + piece + '.png';
         }
 
-        function initHostPeer(id) {
+        function generateRandomCode() {
+            return Math.floor(10000 + Math.random() * 90000).toString();
+        }
+
+        function initHostPeer() {
+            let id = generateRandomCode();
             peer = new Peer('minichess-room-' + id);
             
             peer.on('open', () => {
@@ -75,7 +80,7 @@
                     dropOffBoard: 'trash', 
                     sparePieces: true, 
                     position: 'start',
-                    pieceTheme: getLocalPieceTheme
+                    pieceTheme: getPieceTheme
                 });
                 setupMoveListeners();
             });
@@ -105,11 +110,10 @@
                 location.reload();
             });
         }
-
-        function clearBoard() { board.clear(false); }
         
         function confirmSetup() {
             let minsValue = parseInt($('#mins').val()) || 10;
+            // Generate basic standard configurations based on whatever you placed
             let fen = board.fen() + " w - - 0 1"; 
             
             conn.send({ type: 'setup', fen: fen, mins: minsValue });
@@ -128,9 +132,9 @@
             board = Chessboard('board', { 
                 draggable: true, 
                 position: fen, 
-                onDragStart, 
-                onDrop, 
-                pieceTheme: getLocalPieceTheme
+                onDragStart: onDragStart, 
+                onDrop: onDrop, 
+                pieceTheme: getPieceTheme
             });
             if(color === 'black') board.orientation('black');
             
@@ -156,23 +160,30 @@
             $('#black-time-display').text("Black: " + formatTime(blackTime));
         }
 
-        // Checks if the game has ended based on chess rules
+        function onDragStart(source, piece, position, orientation) {
+            if (game.game_over()) return false;
+            // Don't pick up pieces if it's not your turn
+            if ((game.turn() === 'w' && myColor !== 'white') || (game.turn() === 'b' && myColor !== 'black')) return false;
+            // Don't drag opposing color pieces
+            if ((game.turn() === 'w' && piece.search(/^b/) !== -1) || (game.turn() === 'b' && piece.search(/^w/) !== -1)) return false;
+        }
+
+        function onDrop(source, target) {
+            let moveObj = { from: source, to: target, promotion: 'q' };
+            let move = game.move(moveObj);
+            if (move === null) return 'snapback';
+
+            // Send move update over network connection
+            conn.send({ type: 'move', moveObj: moveObj, clocks: { w: whiteTime, b: blackTime } });
+            checkGameOver();
+        }
+
         function checkGameOver() {
             if (game.game_over()) {
-                clearInterval(clockInterval); // Freeze the clocks immediately
-                
+                clearInterval(clockInterval);
                 if (game.in_checkmate()) {
-                    // The player whose turn it WAS right before the move loses.
-                    // If it's now White's turn, Black just delivered checkmate.
-                    let loser = game.turn() === 'w' ? 'White' : 'Black';
                     let winner = game.turn() === 'w' ? 'Black' : 'White';
                     alert("Checkmate! " + winner + " wins!");
-                } else if (game.in_stalemate()) {
-                    alert("Game Over: Draw by Stalemate!");
-                } else if (game.in_threefold_repetition()) {
-                    alert("Game Over: Draw by Threefold Repetition!");
-                } else if (game.insufficient_material()) {
-                    alert("Game Over: Draw by Insufficient Material (Not enough pieces to mate)!");
                 } else {
                     alert("Game Over: Draw!");
                 }
@@ -189,40 +200,34 @@
                     whiteTime = d.clocks.w;
                     blackTime = d.clocks.b;
                     updateUI();
-                    checkGameOver(); // Check rules after opponent moves
+                    checkGameOver();
                 }
             });
         }
 
-        $('#create-btn').on('click', () => {
-            let code = Array.from({length:5}, ()=> 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'[Math.floor(Math.random()*32)]).join('');
-            initHostPeer(code);
-        });
-
-        $('#join-btn').on('click', () => {
-            let targetCode = $('#join-code').val().trim().toUpperCase();
-            if(!targetCode) return alert("Enter a code first!");
-            initJoinerAndConnect(targetCode);
-        });
-
-        function onDragStart(s, p) { 
-            return !game.game_over() && (game.turn() === myColor[0]) && (p.search(myColor === 'white' ? /^w/ : /^b/) !== -1); 
-        }
-
-        function onDrop(s, t) {
-            let m = game.move({ from: s, to: t, promotion: 'q' });
-            if (!m) return 'snapback';
-            
-            conn.send({ 
-                type: 'move', 
-                moveObj: { from: s, to: t, promotion: 'q' },
-                clocks: { w: whiteTime, b: blackTime }
+        // Button Event Triggers
+        $(document).ready(function() {
+            $('#create-btn').on('click', function() {
+                initHostPeer();
             });
 
-            // Delay checking game over by a tiny fraction of a second 
-            // so the piece physically drops onto the board before the alert box freezes the screen.
-            setTimeout(checkGameOver, 150);
-        }
+            $('#join-btn').on('click', function() {
+                let code = $('#join-code').val().trim();
+                if(code) {
+                    initJoinerAndConnect(code);
+                } else {
+                    alert("Please enter a code!");
+                }
+            });
+
+            $('#clear-board-btn').on('click', function() {
+                if(board) board.clear(false);
+            });
+
+            $('#confirm-setup-btn').on('click', function() {
+                confirmSetup();
+            });
+        });
     </script>
 </body>
 </html>
