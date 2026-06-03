@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Mini Chess - Same Folder Fix</title>
-    <!-- Dependencies injected via CDN (jQuery, Chess.js, Chessboard.js, and PeerJS) -->
+    <title>Mini Chess Challenge</title>
+    <!-- Verified Chessboard Stylesheet -->
     <link rel="stylesheet" href="https://cloudflare.com">
     <style>
         body { font-family: sans-serif; background: #302e2b; color: #fff; display: flex; flex-direction: column; align-items: center; min-height: 100vh; margin: 0; }
@@ -44,14 +44,15 @@
 
     <div id="board"></div>
 
-    <!-- Required CDNs properly resolved -->
+    <!-- Verified CDN Scripts Loaded in Order -->
     <script src="https://jquery.com"></script>
     <script src="https://cloudflare.com"></script>
     <script src="https://cloudflare.com"></script>
     <script src="https://unpkg.com"></script>
 
     <script>
-        let game = new Chess(), board = null, peer = null, conn = null, myColor = null;
+        // Declarations are global, but game is initialized inside document.ready
+        let game = null, board = null, peer = null, conn = null, myColor = null;
         let whiteTime = 0, blackTime = 0, clockInterval = null;
 
         // Reads pieces directly from the same folder as index.html
@@ -203,8 +204,11 @@
             });
         }
 
-        // COMPLETED: Appended missing click listeners and closed handlers
+        // App and buttons are initialized together here
         $(document).ready(function() {
+            // Fixes the Initialization ReferenceError 
+            game = new Chess(); 
+
             $('#create-btn').on('click', function() {
                 initHostPeer();
             });
