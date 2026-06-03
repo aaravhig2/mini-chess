@@ -2,113 +2,227 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Instant Chess</title>
+    <title>Mini Chess - Same Folder Fix</title>
+    <link rel="stylesheet" href="https://cloudflare.com">
     <style>
-        body { font-family: sans-serif; background: #302e2b; color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }
-        .grid { display: grid; grid-template-columns: repeat(8, 50px); grid-template-rows: repeat(8, 50px); border: 4px solid #404040; }
-        .square { width: 50px; height: 50px; display: flex; align-items: center; justify-content: center; font-size: 35px; cursor: pointer; user-select: none; }
-        .light { background-color: #f0d9b5; }
-        .dark { background-color: #b58863; }
-        .selected { background-color: #7b973c !important; }
-        .btn { background: #81b64c; color: #fff; border: none; padding: 12px 24px; cursor: pointer; border-radius: 4px; font-weight: bold; font-size: 16px; margin-top: 20px; }
-        #status { margin-bottom: 15px; font-size: 1.2rem; font-weight: bold; }
+        body { font-family: sans-serif; background: #302e2b; color: #fff; display: flex; flex-direction: column; align-items: center; min-height: 100vh; margin: 0; }
+        #board { width: 400px; max-width: 90vw; margin: 20px 0; }
+        .menu { background: #262421; padding: 20px; border-radius: 8px; text-align: center; width: 320px; }
+        .btn { background: #81b64c; color: #fff; border: none; padding: 10px 20px; cursor: pointer; border-radius: 4px; font-weight: bold; margin: 5px; width: 90%; }
+        input { padding: 10px; text-transform: uppercase; text-align: center; width: 85%; margin: 5px; background: #1a1917; border: 1px solid #444; color: #fff; }
+        .hidden { display: none; }
+        .timer-container { font-size: 1.5rem; font-weight: bold; background: #262421; padding: 10px; margin: 10px; border-radius: 5px; text-align: center; width: 320px; }
     </style>
 </head>
 <body>
 
-    <h1>Simplified Local Chess</h1>
-    <div id="status">White's Turn</div>
-    <div id="board" class="grid"></div>
-    <button class="btn" onclick="resetGame()">Reset Board</button>
+    <h1>Mini Chess Challenge</h1>
+    
+    <div id="game-info" class="timer-container" style="display:none;">
+        <span id="white-time-display">--:--</span> | <span id="black-time-display">--:--</span>
+    </div>
+    
+    <div class="menu" id="menu">
+        <div id="lobby-ui">
+            <label style="font-size: 0.9rem; color: #aaa; display: block; margin-bottom: 2px;">Time Control (Minutes 1-100):</label>
+            <input type="number" id="mins" value="10" min="1" max="100" placeholder="Minutes">
+            <button class="btn" id="create-btn">Create Challenge</button>
+            <input type="text" id="join-code" placeholder="ENTER CHALLENGE CODE" maxlength="5">
+            <button class="btn" id="join-btn">Join Challenge</button>
+        </div>
+
+        <div id="waiting-ui" class="hidden">
+            <h3 id="status-text">Waiting for opponent...</h3>
+            <div id="setup-tools" class="hidden">
+                <button class="btn" id="clear-board-btn">Clear Board</button>
+                <button class="btn" id="confirm-setup-btn">Confirm Position & Start</button>
+                <p style="font-size: 0.7rem; color: #aaa;">Drag pieces to set the board</p>
+            </div>
+        </div>
+    </div>
+
+    <div id="board"></div>
+
+    <script src="https://jquery.com"></script>
+    <script src="https://cloudflare.com"></script>
+    <script src="https://cloudflare.com"></script>
+    <script src="https://unpkg.com"></script>
 
     <script>
-        // Standard starting board configuration layout using raw text emoji characters
-        const startLayout = [
-            ['♜','♞','♝','♛','♚','♝','♞','♜'],
-            ['♟','♟','♟','♟','♟','♟','♟','♟'],
-            ['','','','','','','',''],
-            ['','','','','','','',''],
-            ['','','','','','','',''],
-            ['','','','','','','',''],
-            ['♙','♙','♙','♙','♙','♙','♙','♙'],
-            ['♖','♘','♗','♕','♔','♗','♘','♖']
-        ];
+        let game = new Chess(), board = null, peer = null, conn = null, myColor = null;
+        let whiteTime = 0, blackTime = 0, clockInterval = null;
 
-        let boardState = JSON.parse(JSON.stringify(startLayout));
-        let selectedSquare = null;
-        let currentTurn = 'white'; // white moves white pieces, black moves black pieces
-
-        function isWhitePiece(piece) {
-            return ['♙','♖','♘','♗','♕','♔'].includes(piece);
+        // FIXED: Now reads pieces directly from the same folder as index.html
+        function getLocalPieceTheme(piece) {
+            return piece + '.png';
         }
 
-        function createBoard() {
-            const boardEl = document.getElementById('board');
-            boardEl.innerHTML = '';
+        function generateRandomCode() {
+            return Math.floor(10000 + Math.random() * 90000).toString();
+        }
+
+        function initHostPeer() {
+            let id = generateRandomCode();
+            peer = new Peer('minichess-room-' + id);
             
-            for (let r = 0; r < 8; r++) {
-                for (let c = 0; c < 8; c++) {
-                    const square = document.createElement('div');
-                    square.className = `square ${(r + c) % 2 === 0 ? 'light' : 'dark'}`;
-                    square.innerText = boardState[r][c];
-                    square.dataset.row = r;
-                    square.dataset.col = c;
-                    
-                    square.addEventListener('click', () => handleSquareClick(r, c));
-                    boardEl.appendChild(square);
+            peer.on('open', () => {
+                $('#lobby-ui').hide();
+                $('#waiting-ui').show();
+                $('#status-text').text("Challenge Code: " + id);
+            });
+
+            peer.on('connection', c => {
+                conn = c;
+                $('#setup-tools').show();
+                $('#status-text').text("Opponent Joined! Set pieces.");
+                board = Chessboard('board', { 
+                    draggable: true, 
+                    dropOffBoard: 'trash', 
+                    sparePieces: true, 
+                    position: 'start',
+                    pieceTheme: getLocalPieceTheme
+                });
+                setupMoveListeners();
+            });
+
+            peer.on('error', err => {
+                console.error(err);
+                alert("Connection error. Try creating a new party.");
+                location.reload();
+            });
+        }
+
+        function initJoinerAndConnect(targetCode) {
+            peer = new Peer(); 
+            
+            peer.on('open', () => {
+                $('#lobby-ui').hide();
+                $('#waiting-ui').show();
+                $('#status-text').text("Waiting for Host to set board...");
+                
+                conn = peer.connect('minichess-room-' + targetCode);
+                setupMoveListeners();
+            });
+
+            peer.on('error', err => {
+                console.error(err);
+                alert("Could not find that room code.");
+                location.reload();
+            });
+        }
+        
+        function confirmSetup() {
+            let minsValue = parseInt($('#mins').val()) || 10;
+            let fen = board.fen() + " w - - 0 1"; 
+            
+            conn.send({ type: 'setup', fen: fen, mins: minsValue });
+            startGame(fen, 'white', minsValue);
+        }
+
+        function startGame(fen, color, mins) {
+            myColor = color;
+            game.load(fen);
+            
+            $('#menu').hide();
+            $('#game-info').show();
+            
+            whiteTime = blackTime = mins * 60;
+            
+            board = Chessboard('board', { 
+                draggable: true, 
+                position: fen, 
+                onDragStart: onDragStart, 
+                onDrop: onDrop, 
+                pieceTheme: getLocalPieceTheme
+            });
+            if(color === 'black') board.orientation('black');
+            
+            startClock();
+            updateUI();
+        }
+
+        function startClock() {
+            if (clockInterval) clearInterval(clockInterval);
+            clockInterval = setInterval(() => {
+                if (game.turn() === 'w') whiteTime--; else blackTime--;
+                updateUI();
+                if (whiteTime <= 0 || blackTime <= 0) {
+                    clearInterval(clockInterval);
+                    alert(whiteTime <= 0 ? "Black wins on time!" : "White wins on time!");
+                }
+            }, 1000);
+        }
+
+        function updateUI() {
+            const formatTime = s => Math.floor(s / 60) + ":" + (s % 60).toString().padStart(2, '0');
+            $('#white-time-display').text("White: " + formatTime(whiteTime));
+            $('#black-time-display').text("Black: " + formatTime(blackTime));
+        }
+
+        function onDragStart(source, piece, position, orientation) {
+            if (game.game_over()) return false;
+            if ((game.turn() === 'w' && myColor !== 'white') || (game.turn() === 'b' && myColor !== 'black')) return false;
+            if ((game.turn() === 'w' && piece.search(/^b/) !== -1) || (game.turn() === 'b' && piece.search(/^w/) !== -1)) return false;
+        }
+
+        function onDrop(source, target) {
+            let moveObj = { from: source, to: target, promotion: 'q' };
+            let move = game.move(moveObj);
+            if (move === null) return 'snapback';
+
+            conn.send({ type: 'move', moveObj: moveObj, clocks: { w: whiteTime, b: blackTime } });
+            checkGameOver();
+        }
+
+        function checkGameOver() {
+            if (game.game_over()) {
+                clearInterval(clockInterval);
+                if (game.in_checkmate()) {
+                    let winner = game.turn() === 'w' ? 'Black' : 'White';
+                    alert("Checkmate! " + winner + " wins!");
+                } else {
+                    alert("Game Over: Draw!");
                 }
             }
         }
 
-        function handleSquareClick(r, c) {
-            const piece = boardState[r][c];
-            
-            // If no piece is currently selected
-            if (selectedSquare === null) {
-                if (!piece) return;
-                
-                // Turn enforcement check
-                if (currentTurn === 'white' && !isWhitePiece(piece)) return;
-                if (currentTurn === 'black' && isWhitePiece(piece)) return;
-                
-                selectedSquare = { row: r, col: c };
-                highlightSquare(r, c);
-            } else {
-                // If clicking the exact same square twice, unselect it
-                if (selectedSquare.row === r && selectedSquare.col === c) {
-                    selectedSquare = null;
-                    createBoard();
-                    return;
+        function setupMoveListeners() {
+            conn.on('data', d => {
+                if(d.type === 'setup') {
+                    startGame(d.fen, 'black', d.mins);
+                } else if(d.type === 'move') {
+                    game.move(d.moveObj);
+                    board.position(game.fen());
+                    whiteTime = d.clocks.w;
+                    blackTime = d.clocks.b;
+                    updateUI();
+                    checkGameOver();
                 }
-                
-                // Execute move execution update logic
-                boardState[r][c] = boardState[selectedSquare.row][selectedSquare.col];
-                boardState[selectedSquare.row][selectedSquare.col] = '';
-                
-                selectedSquare = null;
-                currentTurn = currentTurn === 'white' ? 'black' : 'white';
-                document.getElementById('status').innerText = `${currentTurn.charAt(0).toUpperCase() + currentTurn.slice(1)}'s Turn`;
-                
-                createBoard();
-            }
+            });
         }
 
-        function highlightSquare(r, c) {
-            createBoard(); // Reset highlights
-            const index = r * 8 + c;
-            document.getElementById('board').children[index].classList.add('selected');
-        }
+        $(document).ready(function() {
+            $('#create-btn').on('click', function() {
+                initHostPeer();
+            });
 
-        function resetGame() {
-            boardState = JSON.parse(JSON.stringify(startLayout));
-            currentTurn = 'white';
-            document.getElementById('status').innerText = "White's Turn";
-            selectedSquare = null;
-            createBoard();
-        }
+            $('#join-btn').on('click', function() {
+                let code = $('#join-code').val().trim();
+                if(code) {
+                    initJoinerAndConnect(code);
+                } else {
+                    alert("Please enter a code!");
+                }
+            });
 
-        // Initialize display configuration on launch
-        createBoard();
+            $('#clear-board-btn').on('click', function() {
+                if(board) board.clear(false);
+            });
+
+            $('#confirm-setup-btn').on('click', function() {
+                confirmSetup();
+            });
+        });
     </script>
 </body>
 </html>
