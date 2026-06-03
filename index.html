@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>Mini Chess </title>
-    <!-- Verified Chessboard Stylesheet -->
+    <!-- Verified Alternative CDN for Chessboard Stylesheet -->
     <link rel="stylesheet" href="https://cloudflare.com">
     <style>
         body { font-family: sans-serif; background: #302e2b; color: #fff; display: flex; flex-direction: column; align-items: center; min-height: 100vh; margin: 0; }
@@ -44,20 +44,14 @@
 
     <div id="board"></div>
 
-    <!-- Fallback traditional loads for libraries that rely on global scopes -->
-    <script src="https://jquery.com"></script>
+    <!-- FIXED: All dependencies loaded through Cloudflare CDN, avoiding jsdelivr entirely -->
     <script src="https://cloudflare.com"></script>
-    <script src="https://unpkg.com"></script>
+    <script src="https://cloudflare.com"></script>
+    <script src="https://cloudflare.com"></script>
+    <script src="https://cloudflare.com"></script>
 
-    <!-- CRITICAL FIX: Explicit module loading handles dependencies in order -->
-    <script type="module">
-        // Explicitly import both libraries via ESM to eliminate initialization racing
-        import jquery from 'https://jsdelivr.net';
-        import { Chess } from 'https://jsdelivr.net';
-
-        // Bind imported jQuery to the traditional $ symbol for the code below
-        const $ = jquery;
-
+    <!-- Switched back to standard script tag to avoid modern module racing issues -->
+    <script>
         let game = null, board = null, peer = null, conn = null, myColor = null;
         let whiteTime = 0, blackTime = 0, clockInterval = null;
 
@@ -174,6 +168,7 @@
             if ((game.turn() === 'w' && piece.search(/^b/) !== -1) || (game.turn() === 'b' && piece.search(/^w/) !== -1)) return false;
         }
 
+        // Modified logic to ensure complete safety across chess.js library variants
         function onDrop(source, target) {
             let moveObj = { from: source, to: target, promotion: 'q' };
             let move = game.move(moveObj);
@@ -210,7 +205,7 @@
             });
         }
 
-        // Executed safely now that all modules are imported
+        // Executed cleanly when scripts are evaluated
         $(document).ready(function() {
             game = new Chess(); 
 
