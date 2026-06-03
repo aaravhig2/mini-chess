@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Mini Chess</title>
+    <title>Mini Chess </title>
     <!-- Verified Chessboard Stylesheet -->
     <link rel="stylesheet" href="https://cloudflare.com">
     <style>
@@ -44,17 +44,20 @@
 
     <div id="board"></div>
 
-    <!-- Load Global Utilities First -->
-    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/chessboard-js/1.0.0/chessboard-1.0.0.min.js"></script>
+    <!-- Fallback traditional loads for libraries that rely on global scopes -->
+    <script src="https://jquery.com"></script>
+    <script src="https://cloudflare.com"></script>
     <script src="https://unpkg.com"></script>
 
-    <!-- CRITICAL FIX: Script converted to module syntax to allow valid library imports -->
+    <!-- CRITICAL FIX: Explicit module loading handles dependencies in order -->
     <script type="module">
-        // Import the modern Chess engine object from a reliable ESM distribution CDN
+        // Explicitly import both libraries via ESM to eliminate initialization racing
+        import jquery from 'https://jsdelivr.net';
         import { Chess } from 'https://jsdelivr.net';
 
-        // Assign game to global window scope so standard functions can read it seamlessly
+        // Bind imported jQuery to the traditional $ symbol for the code below
+        const $ = jquery;
+
         let game = null, board = null, peer = null, conn = null, myColor = null;
         let whiteTime = 0, blackTime = 0, clockInterval = null;
 
@@ -173,8 +176,6 @@
 
         function onDrop(source, target) {
             let moveObj = { from: source, to: target, promotion: 'q' };
-            
-            // Check move validity via engine
             let move = game.move(moveObj);
             if (move === null) return 'snapback';
 
@@ -209,7 +210,7 @@
             });
         }
 
-        // Bind interactive triggers safely inside the execution context
+        // Executed safely now that all modules are imported
         $(document).ready(function() {
             game = new Chess(); 
 
