@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <title>Mini Chess - Same Folder Fix</title>
+    <!-- Dependencies injected via CDN (jQuery, Chess.js, Chessboard.js, and PeerJS) -->
     <link rel="stylesheet" href="https://cloudflare.com">
     <style>
         body { font-family: sans-serif; background: #302e2b; color: #fff; display: flex; flex-direction: column; align-items: center; min-height: 100vh; margin: 0; }
@@ -43,6 +44,7 @@
 
     <div id="board"></div>
 
+    <!-- Required CDNs properly resolved -->
     <script src="https://jquery.com"></script>
     <script src="https://cloudflare.com"></script>
     <script src="https://cloudflare.com"></script>
@@ -52,7 +54,7 @@
         let game = new Chess(), board = null, peer = null, conn = null, myColor = null;
         let whiteTime = 0, blackTime = 0, clockInterval = null;
 
-        // FIXED: Now reads pieces directly from the same folder as index.html
+        // Reads pieces directly from the same folder as index.html
         function getLocalPieceTheme(piece) {
             return piece + '.png';
         }
@@ -201,6 +203,7 @@
             });
         }
 
+        // COMPLETED: Appended missing click listeners and closed handlers
         $(document).ready(function() {
             $('#create-btn').on('click', function() {
                 initHostPeer();
@@ -208,15 +211,15 @@
 
             $('#join-btn').on('click', function() {
                 let code = $('#join-code').val().trim();
-                if(code) {
+                if(code.length === 5) {
                     initJoinerAndConnect(code);
                 } else {
-                    alert("Please enter a code!");
+                    alert("Please enter a valid 5-digit code.");
                 }
             });
 
             $('#clear-board-btn').on('click', function() {
-                if(board) board.clear(false);
+                if(board) board.clear();
             });
 
             $('#confirm-setup-btn').on('click', function() {
