@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Mini Chess Custom Engine</title>
+    <title>Mini Chess </title>
     <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
     <style>
         body { font-family: sans-serif; background: #302e2b; color: #fff; display: flex; flex-direction: column; align-items: center; min-height: 100vh; margin: 0; padding: 20px; }
@@ -48,13 +48,12 @@
     <script src="https://unpkg.com/peerjs@1.4.7/dist/peerjs.min.js"></script>
 
     <script>
-        let game = new Chess();
+       let game = new Chess();
         let board = null;
         let peer = null;
         let conn = null;
-        let isHost = false;
 
-        // Initialize standard board looking at your main directory for pieces (wP.png, bK.png)
+        // Initialize standard board looking at your main directory for pieces
         board = Chessboard('board', {
             draggable: true,
             position: 'start',
@@ -63,27 +62,36 @@
             onDrop: onDrop
         });
 
-        // HOST Logic: Starts Peer with STUN configuration to bridge different networks
+        // CENTRAL LOGIC: This handles incoming moves for BOTH players
+        function setupDataListener() {
+            conn.on('data', data => {
+                if (data.type === 'setup') {
+                    startGame(data.fen, 'black');
+                } else if (data.type === 'move') {
+                    game.move(data.moveObj);
+                    board.position(game.fen());
+                    setTimeout(checkGameOver, 250); 
+                }
+            });
+        }
+
+        // HOST Logic: Starts Peer with STUN configuration
         function initHostPeer(id) {
             peer = new Peer('minichess-room-' + id, { 
                 debug: 2,
-                config: {
-                    'iceServers': [
-                        { url: 'stun:stun.l.google.com:19302' },
-                        { url: 'stun:stun1.l.google.com:19302' }
-                    ]
-                }
+                config: { 'iceServers': [{ url: 'stun:stun.l.google.com:19302' }] }
             });
             
             peer.on('connection', c => {
                 conn = c;
-                isHost = true;
                 
                 // Switch Host board to Setup Mode configuration
                 $('#setup-tools').show();
                 $('#status-text').text("Opponent Joined! Set your pieces.");
                 
-                // Rebuild board with spare pieces enabled for puzzle construction
+                // Critical Fix: Start listening to the Guest immediately!
+                setupDataListener();
+
                 board = Chessboard('board', {
                     draggable: true,
                     dropOffBoard: 'trash',
@@ -94,37 +102,22 @@
             });
         }
 
-        // Setup Function: Host clears layout completely
-        function clearBoard() { 
-            board.clear(false); 
-        }
-
-        // Setup Function: Host locks in layout and broadcasts it to Guest
+        // Setup Function: Host locks in layout and starts game
         function confirmSetup() {
-            // Get piece placement layout and hardcode standard active game rules to prevent crashes
             let fen = board.fen() + " w - - 0 1"; 
-            
-            // Test if generated FEN is legal inside engine rule parser
             try {
                 let valid = game.load(fen);
-                if (!valid) {
-                    alert("Invalid setup! Make sure both kings are on the board and not in an impossible double check.");
-                    return;
-                }
-            } catch(e) {
-                alert("Invalid piece layout. Please check king placement.");
-                return;
-            }
+                if (!valid) { alert("Invalid setup!"); return; }
+            } catch(e) { alert("Invalid layout!"); return; }
 
-            // Sync with Guest
-            conn.send({ type: 'setup', fen: fen });
+            // Tell the guest what the board looks like
+            if (conn) conn.send({ type: 'setup', fen: fen });
             startGame(fen, 'white');
         }
 
         // Activates strict game rules, hides menus, locks roles
         function startGame(fen, color) {
             $('#menu').hide();
-            
             game.load(fen);
             board = Chessboard('board', { 
                 draggable: true, 
@@ -141,9 +134,8 @@
 
         // UI TRIGGER: Clicking Create Challenge
         $('#create-btn').on('click', () => {
-            let code = Math.floor(10000 + Math.random() * 90000).toString(); // 5 digit numeric code
+            let code = Math.floor(10000 + Math.random() * 90000).toString();
             initHostPeer(code);
-            
             $('#lobby-ui').hide();
             $('#waiting-ui').show();
             $('#status-text').text("Challenge Code: " + code);
@@ -154,35 +146,21 @@
             let code = $('#join-code').val().trim();
             if (!code) { alert("Please enter a room code!"); return; }
             
-            // Fresh peer instance initialization with STUN for Guest network traversal
             peer = new Peer({ 
                 debug: 2,
-                config: {
-                    'iceServers': [
-                        { url: 'stun:stun.l.google.com:19302' },
-                        { url: 'stun:stun1.l.google.com:19302' }
-                    ]
-                }
+                config: { 'iceServers': [{ url: 'stun:stun.l.google.com:19302' }] }
             }); 
             
             peer.on('open', () => {
                 conn = peer.connect('minichess-room-' + code);
-                
                 $('#lobby-ui').hide();
                 $('#waiting-ui').show();
-                $('#status-text').text("Waiting for Host to set board...");
+                $('#status-text').text("Connecting to Host...");
                 
                 conn.on('open', () => {
-                    // Listens for incoming signals from host
-                    conn.on('data', data => {
-                        if (data.type === 'setup') {
-                            startGame(data.fen, 'black');
-                        } else if (data.type === 'move') {
-                            game.move(data.moveObj);
-                            board.position(game.fen());
-                            setTimeout(checkGameOver, 250); // Check engine for match conclusion
-                        }
-                    });
+                    $('#status-text').text("Connected! Waiting for Host setup...");
+                    // Critical Fix: Start listening to the Host immediately!
+                    setupDataListener();
                 });
             });
         });
@@ -191,13 +169,10 @@
         function onDragStart(source, piece, position, orientation) {
             if (game.game_over()) return false;
 
-            // Restrict pick up control based on local side color setting
             if ((orientation === 'white' && piece.search(/^b/) !== -1) ||
                 (orientation === 'black' && piece.search(/^w/) !== -1)) {
                 return false;
             }
-            
-            // Restrict turns matching current engine status
             if ((game.turn() === 'w' && piece.search(/^b/) !== -1) ||
                 (game.turn() === 'b' && piece.search(/^w/) !== -1)) {
                 return false;
@@ -214,11 +189,9 @@
             if (conn) {
                 conn.send({ type: 'move', moveObj: moveObj });
             }
-
-            setTimeout(checkGameOver, 250); // Check engine for local match conclusion
+            setTimeout(checkGameOver, 250);
         }
 
-        // Checks the chess.js engine state for checkmate or draw conditions
         function checkGameOver() {
             if (game.game_over()) {
                 if (game.in_checkmate()) {
@@ -227,12 +200,8 @@
                     alert("Checkmate! " + winner + " wins the match!");
                 } else if (game.in_stalemate()) {
                     alert("Game Over: Draw by Stalemate!");
-                } else if (game.in_threefold_repetition()) {
-                    alert("Game Over: Draw by Threefold Repetition!");
-                } else if (game.insufficient_material()) {
-                    alert("Game Over: Draw due to Insufficient Material!");
                 } else if (game.in_draw()) {
-                    alert("Game Over: Draw by 50-move rule!");
+                    alert("Game Over: Draw!");
                 }
             }
         }
