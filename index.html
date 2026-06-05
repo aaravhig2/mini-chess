@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Mini Chess</title>
+    <title>Mini Chess Custom Engine</title>
     <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
     <style>
         body { font-family: sans-serif; background: #302e2b; color: #fff; display: flex; flex-direction: column; align-items: center; min-height: 100vh; margin: 0; padding: 20px; }
@@ -63,15 +63,23 @@
             onDrop: onDrop
         });
 
-        // HOST Logic: Starts Peer and waits for Guest connection
+        // HOST Logic: Starts Peer with STUN configuration to bridge different networks
         function initHostPeer(id) {
-            peer = new Peer('minichess-room-' + id, { debug: 2 });
+            peer = new Peer('minichess-room-' + id, { 
+                debug: 2,
+                config: {
+                    'iceServers': [
+                        { url: 'stun:stun.l.google.com:19302' },
+                        { url: 'stun:stun1.l.google.com:19302' }
+                    ]
+                }
+            });
             
             peer.on('connection', c => {
                 conn = c;
                 isHost = true;
                 
-                // Flip Host board to Setup Mode configuration
+                // Switch Host board to Setup Mode configuration
                 $('#setup-tools').show();
                 $('#status-text').text("Opponent Joined! Set your pieces.");
                 
@@ -93,7 +101,7 @@
 
         // Setup Function: Host locks in layout and broadcasts it to Guest
         function confirmSetup() {
-            // Get piece placement layout and hardcode standard active game rules to prevent chess.js crashing
+            // Get piece placement layout and hardcode standard active game rules to prevent crashes
             let fen = board.fen() + " w - - 0 1"; 
             
             // Test if generated FEN is legal inside engine rule parser
@@ -146,7 +154,16 @@
             let code = $('#join-code').val().trim();
             if (!code) { alert("Please enter a room code!"); return; }
             
-            peer = new Peer(); // Fresh peer instance initialization for Guest
+            // Fresh peer instance initialization with STUN for Guest network traversal
+            peer = new Peer({ 
+                debug: 2,
+                config: {
+                    'iceServers': [
+                        { url: 'stun:stun.l.google.com:19302' },
+                        { url: 'stun:stun1.l.google.com:19302' }
+                    ]
+                }
+            }); 
             
             peer.on('open', () => {
                 conn = peer.connect('minichess-room-' + code);
@@ -163,6 +180,7 @@
                         } else if (data.type === 'move') {
                             game.move(data.moveObj);
                             board.position(game.fen());
+                            setTimeout(checkGameOver, 250); // Check engine for match conclusion
                         }
                     });
                 });
@@ -195,6 +213,27 @@
             
             if (conn) {
                 conn.send({ type: 'move', moveObj: moveObj });
+            }
+
+            setTimeout(checkGameOver, 250); // Check engine for local match conclusion
+        }
+
+        // Checks the chess.js engine state for checkmate or draw conditions
+        function checkGameOver() {
+            if (game.game_over()) {
+                if (game.in_checkmate()) {
+                    let loser = game.turn() === 'w' ? 'White' : 'Black';
+                    let winner = loser === 'White' ? 'Black' : 'White';
+                    alert("Checkmate! " + winner + " wins the match!");
+                } else if (game.in_stalemate()) {
+                    alert("Game Over: Draw by Stalemate!");
+                } else if (game.in_threefold_repetition()) {
+                    alert("Game Over: Draw by Threefold Repetition!");
+                } else if (game.insufficient_material()) {
+                    alert("Game Over: Draw due to Insufficient Material!");
+                } else if (game.in_draw()) {
+                    alert("Game Over: Draw by 50-move rule!");
+                }
             }
         }
     </script>
